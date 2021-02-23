@@ -198,7 +198,6 @@ static STREAM_TYPE	a[STREAM_ARRAY_SIZE+OFFSET],
 static double	avgtime[TESTS] = {0},
                 maxtime[TESTS] = {0},
 		        mintime[TESTS] = {FLT_MAX,FLT_MAX,FLT_MAX,FLT_MAX,FLT_MAX,FLT_MAX};
-
 static char	*label[TESTS] = {
     "Copy",
     "Scale",
@@ -208,6 +207,13 @@ static char	*label[TESTS] = {
     "3ArrMult_SIMD",
     "Add",
     "Triad"};
+
+#if 1
+// static int run_tests[TESTS] = {0, 0, 0, 0, 1, 0, 0, 0};
+static int run_tests[TESTS] = {0, 0, 1, 0, 1, 0, 0, 0};
+#else
+static int run_tests[TESTS] = {0, 0, 1, 0, 0, 0, 0, 0};
+#endif
 
 /* total bytes per test */
 static double	bytes[TESTS] = {
@@ -232,6 +238,7 @@ extern void tuned_STREAM_Triad(STREAM_TYPE scalar);
 #ifdef _OPENMP
 extern int omp_get_num_threads();
 #endif
+
 int
 main()
 {
@@ -410,6 +417,7 @@ main()
 
     //2ArrMul
     idx++;
+    if (run_tests[idx])
     for (k=0; k<NTIMES; k++)
     {
         times[idx][k] = mysecond();
@@ -424,18 +432,31 @@ main()
 
     //2ArrMul_SIMD
     idx++;
+    if (run_tests[idx])
     for (k=0; k<NTIMES; k++)
     {
         times[idx][k] = mysecond();
 #pragma omp parallel
         {
-            float32x4_t cv, av, bv;
-            for (j=tid * count; j<((tid+1)*count); j+=4) {
+            float32x4_t av[4], bv[4], cv[4];
+            for (j=tid * count; j<((tid+1)*count); j+=16) {
                 //         __asm__("_2arrmul_simd");
-                av = vld1q_f32(&a[j]);
-                bv = vld1q_f32(&b[j]);
-                cv = vmulq_f32(av, bv);
-                vst1q_f32(&c[j], cv);
+                av[0] = vld1q_f32(&a[j]);
+                av[1] = vld1q_f32(&a[j+4]);
+                av[2] = vld1q_f32(&a[j+8]);
+                av[3] = vld1q_f32(&a[j+12]);
+                bv[0] = vld1q_f32(&b[j]);
+                bv[1] = vld1q_f32(&b[j+4]);
+                bv[2] = vld1q_f32(&b[j+8]);
+                bv[3] = vld1q_f32(&b[j+12]);
+                cv[0] = vmulq_f32(av[0], bv[0]);
+                cv[1] = vmulq_f32(av[1], bv[1]);
+                cv[2] = vmulq_f32(av[2], bv[2]);
+                cv[3] = vmulq_f32(av[3], bv[3]);
+                vst1q_f32(&a[j], cv[0]);
+                vst1q_f32(&a[j+4], cv[1]);
+                vst1q_f32(&a[j+8], cv[2]);
+                vst1q_f32(&a[j+12], cv[3]);
             }
         }
         times[idx][k] = mysecond() - times[idx][k];
@@ -443,13 +464,14 @@ main()
 
     //3ArrMul
     idx++;
+    if (run_tests[idx])
     for (k=0; k<NTIMES; k++)
     {
         times[idx][k] = mysecond();
 #pragma omp parallel
         {
             for (j=tid * count; j<((tid+1)*count); j++) {
-                c[j] = a[j] + b[j];
+                c[j] = a[j] * b[j];
             }
         }
         times[idx][k] = mysecond() - times[idx][k];
@@ -457,18 +479,31 @@ main()
 
     //3ArrMul_SIMD
     idx++;
+    if (run_tests[idx])
     for (k=0; k<NTIMES; k++)
     {
         times[idx][k] = mysecond();
 #pragma omp parallel
         {
-            float32x4_t cv, av, bv;
+            float32x4_t av[4], bv[4], cv[4];
             for (j=tid * count; j<((tid+1)*count); j+=4) {
                 //         __asm__("_3arrmul_simd");
-                av = vld1q_f32(&a[j]);
-                bv = vld1q_f32(&b[j]);
-                cv = vmulq_f32(av, bv);
-                vst1q_f32(&c[j], cv);
+                av[0] = vld1q_f32(&a[j]);
+                av[1] = vld1q_f32(&a[j+4]);
+                av[2] = vld1q_f32(&a[j+8]);
+                av[3] = vld1q_f32(&a[j+12]);
+                bv[0] = vld1q_f32(&b[j]);
+                bv[1] = vld1q_f32(&b[j+4]);
+                bv[2] = vld1q_f32(&b[j+8]);
+                bv[3] = vld1q_f32(&b[j+12]);
+                cv[0] = vmulq_f32(av[0], bv[0]);
+                cv[1] = vmulq_f32(av[1], bv[1]);
+                cv[2] = vmulq_f32(av[2], bv[2]);
+                cv[3] = vmulq_f32(av[3], bv[3]);
+                vst1q_f32(&c[j],	cv[0]);
+                vst1q_f32(&c[j+4],	cv[1]);
+                vst1q_f32(&c[j+8],	cv[2]);
+                vst1q_f32(&c[j+12],	cv[3]);
             }
         }
         times[idx][k] = mysecond() - times[idx][k];
@@ -476,6 +511,7 @@ main()
 
     //Add
     idx++;
+    if (run_tests[idx])
     for (k=0; k<NTIMES; k++)
     {	
         times[idx][k] = mysecond();
@@ -487,6 +523,7 @@ main()
 
     //Triad
     idx++;
+    if (run_tests[idx])
     for (k=0; k<NTIMES; k++)
     {
         times[idx][k] = mysecond();
@@ -510,6 +547,10 @@ main()
     printf("%-15s%-15s%-15s%-15s%-15s%-15s%-15s%-15s\n",
             "Function", "TotalMem(MB)", "WrkSetSize(MB)", "BestRate(MB/s)", "AvgRate(MB/s)", "AvgTime", "MinTime", "MaxTime");
     for (j=0; j<TESTS; j++) {
+        if (!run_tests[j]) {
+            continue;
+        }
+
         avgtime[j] = avgtime[j]/(double)(NTIMES-1);
         
         wrk_set_size_mb = bytes[j] / 1024.0/1024.0;
